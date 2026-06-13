@@ -3,6 +3,8 @@ uvicorn
 python-multipart
 Pillow
 motor
+pymongo[srv]
+certifi
 jinja2
 python-dotenv
 bcrypt
