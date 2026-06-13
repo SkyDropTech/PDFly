@@ -1,279 +1,508 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDFly - Image to PDF Converter</title>
+    <title>PDFly - Professional PDF Tools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
                         brand: {
-                            yellow: '#EAB308',
-                            black: '#171717',
-                            gray: '#FAFAFA'
+                            yellow: '#FACC15', yellowDark: '#EAB308',
+                            darkBg: '#0B0F19', cardDark: '#151A23',
+                            borderDark: '#262D3D', lightBg: '#F8FAFC'
                         }
-                    }
+                    },
+                    boxShadow: { 'glow': '0 0 20px rgba(250, 204, 21, 0.3)', 'glow-hover': '0 0 30px rgba(250, 204, 21, 0.5)' }
                 }
             }
         }
     </script>
     <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .theme-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Drag and drop card animations */
+        .draggable-card { transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s; cursor: grab; }
+        .draggable-card:active { cursor: grabbing; }
+        .drag-over { border: 2px dashed #FACC15 !important; transform: scale(1.05); opacity: 0.8; }
+
+        /* Custom Auth Animation Keyframes */
+        @keyframes fillProgress {
+            0% { transform: scaleX(0); }
+            40% { transform: scaleX(0.4); }
+            80% { transform: scaleX(0.9); }
+            100% { transform: scaleX(1); }
+        }
+        .animate-progress {
+            transform-origin: left;
+            animation: fillProgress 2.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
     </style>
 </head>
-<body class="bg-brand-gray text-brand-black font-sans min-h-screen flex flex-col">
+<body class="bg-brand-lightBg text-slate-800 dark:bg-brand-darkBg dark:text-slate-100 min-h-screen flex flex-col custom-scrollbar relative">
 
-    <header class="bg-white shadow-sm border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-2 cursor-pointer" onclick="location.reload()">
-                <div class="bg-brand-yellow w-8 h-8 rounded flex items-center justify-center font-bold text-brand-black">P</div>
-                <span class="font-bold text-xl tracking-tight">PDFly</span>
+    <div id="auth-animation-overlay" class="fixed inset-0 bg-brand-lightBg dark:bg-brand-darkBg z-[200] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0">
+        <div class="relative flex items-center justify-center mb-8">
+            <div class="absolute inset-0 bg-brand-yellow/30 dark:bg-brand-yellow/20 rounded-full blur-2xl animate-ping" style="animation-duration: 2s;"></div>
+            <div class="relative bg-white dark:bg-brand-cardDark p-8 rounded-3xl shadow-glow border border-brand-yellow/50 animate-bounce" style="animation-duration: 2s;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 text-brand-yellow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
             </div>
-            <div class="flex items-center gap-4 text-sm font-medium">
-                <a href="#" class="hover:text-brand-yellow transition-colors">Log In</a>
-                <a href="#" class="bg-brand-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors">Sign Up</a>
+        </div>
+        <h2 id="auth-animation-text" class="text-3xl font-extrabold text-slate-800 dark:text-white tracking-tight animate-pulse">Authenticating...</h2>
+        <div class="w-64 h-2 bg-slate-200 dark:bg-slate-800 rounded-full mt-8 overflow-hidden shadow-inner border border-gray-200 dark:border-brand-borderDark">
+            <div id="auth-progress-fill" class="h-full bg-gradient-to-r from-brand-yellow to-amber-500 rounded-full"></div>
+        </div>
+    </div>
+
+    <div id="drag-overlay" class="fixed inset-0 bg-brand-yellow/95 dark:bg-brand-yellow/90 z-[100] hidden flex-col items-center justify-center pointer-events-none transition-opacity duration-300">
+        <div class="border-8 border-white border-dashed rounded-3xl w-[90%] h-[90%] flex flex-col items-center justify-center animate-pulse">
+            <div class="text-white text-8xl mb-6">📥</div>
+            <h2 class="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">Drop Images Here to Upload</h2>
+        </div>
+    </div>
+
+    <header class="bg-white/80 dark:bg-brand-darkBg/80 backdrop-blur-md border-b border-gray-200 dark:border-brand-borderDark sticky top-0 z-40 theme-transition">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer group" onclick="location.reload()">
+                <div class="bg-gradient-to-br from-brand-yellow to-amber-500 w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-slate-900 shadow-glow">P</div>
+                <span class="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">PDFly</span>
+            </div>
+
+            <div class="flex items-center gap-5 text-sm font-semibold">
+                <button onclick="toggleTheme()" class="p-2.5 rounded-full bg-slate-100 dark:bg-brand-cardDark hover:bg-slate-200 dark:hover:bg-brand-borderDark transition-colors shadow-sm">
+                    <svg id="theme-icon-light" class="w-5 h-5 hidden dark:block text-brand-yellow" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="theme-icon-dark" class="w-5 h-5 block dark:hidden text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+
+                <div id="auth-buttons" class="flex items-center gap-4">
+                    <button onclick="openAuthModal('login')" class="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">Log in</button>
+                    <button onclick="openAuthModal('signup')" class="bg-slate-900 dark:bg-brand-yellow text-white dark:text-slate-900 px-6 py-2.5 rounded-lg hover:bg-slate-800 dark:hover:bg-brand-yellowDark shadow-lg transition-transform hover:-translate-y-0.5">Sign up</button>
+                </div>
+
+                <div id="profile-section" class="hidden relative">
+                    <button onclick="toggleProfileMenu()" class="flex items-center gap-2 bg-slate-100 dark:bg-brand-cardDark border border-gray-200 dark:border-brand-borderDark px-4 py-2.5 rounded-lg hover:border-brand-yellow dark:hover:border-brand-yellow transition-colors shadow-sm">
+                        <span id="user-display-name" class="text-sm font-bold max-w-[120px] truncate text-slate-700 dark:text-slate-300"></span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-yellow" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    <div id="profile-menu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-brand-cardDark border border-gray-200 dark:border-brand-borderDark rounded-xl shadow-xl overflow-hidden z-50">
+                        <button onclick="openHistoryModal()" class="w-full text-left px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-[#11151C] transition-colors flex items-center gap-2 border-b border-gray-100 dark:border-brand-borderDark"><span class="text-lg">🕒</span> Conversion History</button>
+                        <button onclick="logout()" class="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center gap-2"><span class="text-lg">🚪</span> Log Out</button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col relative">
-
-        <div id="landing-view" class="flex-grow flex flex-col items-center justify-center px-4">
-            <h1 class="text-4xl md:text-5xl font-extrabold mb-4 text-center">Image to PDF Converter</h1>
-            <p class="text-gray-500 mb-10 text-center max-w-lg">Convert your images into a high-quality PDF document instantly. Fast, secure, and easy to use.</p>
+    <main class="flex-grow flex flex-col relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div id="landing-view" class="flex flex-col items-center w-full mt-8">
+            <h1 class="text-5xl md:text-6xl font-extrabold mb-6 text-center tracking-tight">The ultimate <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-yellow to-amber-500">PDF toolkit</span></h1>
+            <p class="text-lg text-slate-500 dark:text-slate-400 mb-12 text-center max-w-2xl font-medium">Professional-grade tools to convert, edit, and compress your documents.</p>
             
             <input type="file" id="file-input" multiple accept="image/png, image/jpeg, image/jpg, image/webp" class="hidden">
-            
-            <button onclick="document.getElementById('file-input').click()" 
-                class="bg-brand-yellow hover:bg-yellow-400 text-brand-black font-bold text-lg py-5 px-12 rounded-lg shadow-lg flex items-center gap-3 transition-transform transform hover:-translate-y-1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 border-2 border-brand-black rounded-full" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                ADD FILE(S)
+            <button onclick="handleAddFileClick()" class="bg-gradient-to-r from-brand-yellow to-amber-500 hover:from-brand-yellowDark hover:to-amber-600 text-slate-900 font-extrabold text-xl py-5 px-16 rounded-2xl shadow-glow hover:shadow-glow-hover flex items-center gap-4 transition-all transform hover:-translate-y-1 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Select Images
             </button>
-            <p class="text-sm text-gray-400 mt-4">or drag & drop images here</p>
+            <p class="text-sm font-medium text-slate-400 mb-16">or drag and drop them anywhere</p>
+
+            <div class="w-full mt-4">
+                <div class="flex items-center justify-center gap-4 mb-8"><div class="h-px bg-gray-200 dark:bg-brand-borderDark flex-grow max-w-[100px]"></div><h3 class="text-center font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-sm">Popular PDF tools</h3><div class="h-px bg-gray-200 dark:bg-brand-borderDark flex-grow max-w-[100px]"></div></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-5 mb-12">
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📄</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Edit PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🗜️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Compress PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📑</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Merge PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📝</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF to Word</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📝</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Word to PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🖼️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF to JPG</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📸</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">JPG to PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1 ring-2 ring-brand-yellow ring-offset-2 ring-offset-white dark:ring-offset-brand-darkBg"><div class="text-4xl">🔄</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF Converter</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1 relative"><div class="text-4xl relative">🤖<span class="absolute -top-3 -right-4 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-md">NEW</span></div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Chat with PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">✂️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Split PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🔓</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Unlock PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">ℹ️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Edit metadata</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🗑️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Delete pages</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🔀</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Rearrange pages</span></div>
+                </div>
+
+                <div class="flex items-center justify-center gap-4 mb-8"><div class="h-px bg-gray-200 dark:bg-brand-borderDark flex-grow max-w-[100px]"></div><h3 class="text-center font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-sm">Other PDF tools</h3><div class="h-px bg-gray-200 dark:bg-brand-borderDark flex-grow max-w-[100px]"></div></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-5 mb-10">
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">👁️‍🗨️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF OCR</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1 relative"><div class="text-4xl relative">📋<span class="absolute -top-3 -right-4 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-md">NEW</span></div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Summarize</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1 relative"><div class="text-4xl relative">🌐<span class="absolute -top-3 -right-4 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-md">NEW</span></div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">Translate PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🏞️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PNG to PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">🖼️</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF to PNG</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📚</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">EPUB to PDF</span></div>
+                    <div class="bg-white dark:bg-brand-cardDark border border-gray-100 dark:border-brand-borderDark p-6 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:shadow-xl hover:border-brand-yellow/50 transition-all transform hover:-translate-y-1"><div class="text-4xl">📖</div><span class="text-sm font-bold text-slate-700 dark:text-slate-300">PDF to EPUB</span></div>
+                </div>
+            </div>
         </div>
 
-        <div id="editor-view" class="hidden flex-grow flex flex-col md:flex-row w-full max-w-7xl mx-auto p-4 gap-6 h-[calc(100vh-4rem)]">
-            
-            <div class="flex-grow bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
-                <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <span class="font-semibold" id="file-count">0 Files Selected</span>
-                    <button onclick="document.getElementById('file-input').click()" class="text-sm bg-brand-black text-white px-3 py-1 rounded hover:bg-gray-800 flex items-center gap-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                        Add More
-                    </button>
+        <div id="editor-view" class="hidden flex-col lg:flex-row w-full gap-8 h-auto lg:h-[70vh]">
+            <div class="flex-grow bg-white dark:bg-brand-cardDark rounded-2xl shadow-lg border border-gray-200 dark:border-brand-borderDark flex flex-col overflow-hidden theme-transition relative">
+                <div class="p-5 border-b border-gray-100 dark:border-brand-borderDark flex justify-between items-center bg-slate-50/50 dark:bg-[#11151C]">
+                    <span class="font-bold text-lg flex items-center gap-3">
+                        <span id="file-count">0 Files Selected</span>
+                        <span class="text-xs font-normal text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded hidden md:block">Hint: Drag cards to reorder</span>
+                    </span>
+                    <button onclick="handleAddFileClick()" class="text-sm bg-slate-900 dark:bg-brand-yellow text-white dark:text-slate-900 px-4 py-2 rounded-lg hover:bg-slate-800 dark:hover:bg-brand-yellowDark flex items-center gap-2 font-bold transition-colors">Add More</button>
                 </div>
-                
-                <div id="image-grid" class="flex-grow p-6 overflow-y-auto custom-scrollbar flex flex-wrap gap-6 items-start justify-center bg-gray-50">
-                    </div>
+                <div id="image-grid" class="flex-grow p-8 overflow-y-auto custom-scrollbar flex flex-wrap gap-6 items-start justify-center bg-transparent"></div>
             </div>
 
-            <div class="w-full md:w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                <div class="p-5 border-b border-gray-100">
-                    <h2 class="text-xl font-bold text-center">PDF Converter</h2>
+            <div class="w-full lg:w-96 flex-shrink-0 bg-white dark:bg-brand-cardDark rounded-2xl shadow-lg border border-gray-200 dark:border-brand-borderDark flex flex-col theme-transition">
+                <div class="p-6 border-b border-gray-100 dark:border-brand-borderDark">
+                    <h2 class="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">Output Settings</h2>
                 </div>
-                
-                <div class="p-5 flex-grow flex flex-col gap-6 overflow-y-auto custom-scrollbar">
-                    
+                <div class="p-6 flex-grow flex flex-col gap-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">File Name</label>
-                        <input type="text" id="pdf-filename" value="document.pdf" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-transparent transition-colors">
+                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Document Name</label>
+                        <input type="text" id="pdf-filename" value="document.pdf" class="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0F19] border border-gray-200 dark:border-brand-borderDark rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow font-medium transition-colors">
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Page Size</label>
-                        <div class="flex flex-col gap-2">
-                            <button class="setting-btn active border-2 border-brand-yellow font-semibold py-2 rounded text-sm w-full text-left px-4" data-group="size">Original size</button>
-                            <button class="setting-btn border-2 border-gray-200 hover:border-gray-300 py-2 rounded text-sm w-full text-left px-4 text-gray-600" data-group="size">A4</button>
-                            <button class="setting-btn border-2 border-gray-200 hover:border-gray-300 py-2 rounded text-sm w-full text-left px-4 text-gray-600" data-group="size">US Letter</button>
+                    <div id="progress-container" class="hidden flex-col gap-2 mt-4">
+                        <div class="flex justify-between text-xs font-bold">
+                            <span class="text-slate-500" id="progress-text">Processing images...</span>
+                            <span class="text-brand-yellow" id="progress-percent">0%</span>
                         </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Orientation</label>
-                        <div class="flex rounded-md shadow-sm border border-gray-200">
-                            <button class="setting-btn active flex-1 py-2 text-sm border-r border-gray-200 bg-gray-100 font-semibold text-brand-black" data-group="orientation">Auto</button>
-                            <button class="setting-btn flex-1 py-2 text-sm border-r border-gray-200 text-gray-500 hover:bg-gray-50" data-group="orientation">Portrait</button>
-                            <button class="setting-btn flex-1 py-2 text-sm text-gray-500 hover:bg-gray-50" data-group="orientation">Landscape</button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Margin</label>
-                        <div class="flex rounded-md shadow-sm border border-gray-200">
-                            <button class="setting-btn active flex-1 py-2 text-sm border-r border-gray-200 bg-gray-100 font-semibold text-brand-black" data-group="margin">None</button>
-                            <button class="setting-btn flex-1 py-2 text-sm border-r border-gray-200 text-gray-500 hover:bg-gray-50" data-group="margin">Small</button>
-                            <button class="setting-btn flex-1 py-2 text-sm text-gray-500 hover:bg-gray-50" data-group="margin">Big</button>
+                        <div class="w-full h-2.5 bg-slate-100 dark:bg-[#0B0F19] rounded-full overflow-hidden border border-gray-200 dark:border-brand-borderDark">
+                            <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-yellow to-amber-500 w-0 transition-all duration-300 ease-out"></div>
                         </div>
                     </div>
                 </div>
-
-                <div class="p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl">
-                    <button id="convert-btn" onclick="handleConvert()" class="w-full bg-brand-yellow hover:bg-yellow-400 text-brand-black font-bold text-lg py-4 rounded-lg shadow transition-colors">
-                        CONVERT TO PDF
-                    </button>
+                <div class="p-6 border-t border-gray-100 dark:border-brand-borderDark bg-slate-50/50 dark:bg-[#11151C] rounded-b-2xl">
+                    <button id="convert-btn" onclick="handleConvert()" class="w-full bg-gradient-to-r from-brand-yellow to-amber-500 hover:from-brand-yellowDark text-slate-900 font-extrabold text-lg py-4 rounded-xl shadow-glow transition-all transform hover:-translate-y-0.5">GENERATE PDF</button>
                 </div>
             </div>
         </div>
     </main>
 
+    <div id="auth-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-brand-cardDark w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 dark:border-brand-borderDark overflow-hidden">
+            <div class="flex border-b border-gray-200 dark:border-brand-borderDark">
+                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-4 text-sm font-bold border-b-2 border-brand-yellow text-brand-yellow bg-slate-50/50 dark:bg-[#11151C]">Log In</button>
+                <button id="tab-signup" onclick="switchAuthTab('signup')" class="flex-1 py-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-white">Sign Up</button>
+            </div>
+            <div class="p-8">
+                <h3 id="auth-title" class="text-2xl font-extrabold mb-6">Welcome back</h3>
+                <form id="auth-form" onsubmit="handleAuth(event)">
+                    <div id="username-container" class="mb-4 hidden">
+                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Username</label>
+                        <input type="text" id="auth-username" class="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0F19] border border-gray-200 dark:border-brand-borderDark rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow" placeholder="e.g. johndoe123">
+                    </div>
+                    <div class="mb-4">
+                        <label id="auth-identifier-label" class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
+                        <input type="text" id="auth-email" required class="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0F19] border border-gray-200 dark:border-brand-borderDark rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow" placeholder="Email or Username">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Password</label>
+                        <input type="password" id="auth-password" required class="w-full px-4 py-3 bg-slate-50 dark:bg-[#0B0F19] border border-gray-200 dark:border-brand-borderDark rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow">
+                    </div>
+                    <button type="submit" id="auth-submit-btn" class="w-full bg-gradient-to-r from-brand-yellow to-amber-500 text-slate-900 font-extrabold text-lg py-3 rounded-xl shadow-glow">Log In</button>
+                </form>
+                <button onclick="closeAuthModal()" class="mt-6 w-full text-center text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-white">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <div id="history-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-brand-cardDark w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-brand-borderDark overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-6 border-b border-gray-200 dark:border-brand-borderDark flex justify-between items-center bg-slate-50/50 dark:bg-[#11151C]">
+                <h3 class="text-xl font-extrabold flex items-center gap-2"><span class="text-brand-yellow">🕒</span> Conversion History</h3>
+                <button onclick="closeHistoryModal()" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead><tr class="text-sm text-slate-500 dark:text-slate-400 border-b border-gray-200 dark:border-brand-borderDark"><th class="pb-3 font-semibold">File Name</th><th class="pb-3 font-semibold">Images</th><th class="pb-3 font-semibold">Size</th><th class="pb-3 font-semibold">Date</th></tr></thead>
+                    <tbody id="history-table-body" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
-        const fileInput = document.getElementById('file-input');
-        const landingView = document.getElementById('landing-view');
-        const editorView = document.getElementById('editor-view');
-        const imageGrid = document.getElementById('image-grid');
-        const fileCountText = document.getElementById('file-count');
-        const pdfFileNameInput = document.getElementById('pdf-filename');
+        // --- ANIMATION CONTROLLER ---
+        function playAuthAnimation(actionMessage, callback) {
+            const overlay = document.getElementById('auth-animation-overlay');
+            const textElement = document.getElementById('auth-animation-text');
+            const progressFill = document.getElementById('auth-progress-fill');
+            
+            textElement.innerText = actionMessage;
+            
+            // Reset and trigger progress bar animation
+            progressFill.classList.remove('animate-progress');
+            void progressFill.offsetWidth; // trigger reflow
+            progressFill.classList.add('animate-progress');
 
+            // Show overlay
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            
+            // Fade in
+            setTimeout(() => { overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100'); }, 10);
+            
+            // Wait 2.4 seconds, then fade out and execute callback
+            setTimeout(() => {
+                overlay.classList.remove('opacity-100');
+                overlay.classList.add('opacity-0');
+                
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('flex');
+                    if(callback) callback();
+                }, 300); // 300ms fade out
+            }, 2400); 
+        }
+
+        // --- GLOBAL DRAG & DROP LOGIC ---
+        const dragOverlay = document.getElementById('drag-overlay');
+        let dragCounter = 0;
+
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.types.includes("Files")) {
+                dragCounter++;
+                dragOverlay.classList.remove('hidden'); dragOverlay.classList.add('flex');
+            }
+        });
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault(); dragCounter--;
+            if (dragCounter <= 0) { dragCounter = 0; dragOverlay.classList.add('hidden'); dragOverlay.classList.remove('flex'); }
+        });
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => {
+            e.preventDefault(); dragCounter = 0; dragOverlay.classList.add('hidden'); dragOverlay.classList.remove('flex');
+
+            if (!localStorage.getItem('pdfly_token')) { openAuthModal('login'); return; }
+
+            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                if(files.length > 0) {
+                    selectedFiles = [...selectedFiles, ...files];
+                    document.getElementById('landing-view').classList.add('hidden');
+                    document.getElementById('editor-view').classList.remove('hidden');
+                    document.getElementById('editor-view').classList.add('flex'); 
+                    updateGrid();
+                } else { alert("Only image files are supported!"); }
+            }
+        });
+
+        // --- THEME, AUTH, & HISTORY ---
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) { html.classList.remove('dark'); localStorage.setItem('theme', 'light'); } 
+            else { html.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
+        }
+        if (localStorage.getItem('theme') === 'light') document.documentElement.classList.remove('dark');
+
+        let authMode = 'login';
+        function checkLoginState() {
+            const token = localStorage.getItem('pdfly_token');
+            const username = localStorage.getItem('pdfly_username');
+            if (token && username) {
+                document.getElementById('auth-buttons').classList.add('hidden');
+                document.getElementById('profile-section').classList.remove('hidden');
+                document.getElementById('user-display-name').innerText = "@" + username;
+            } else {
+                document.getElementById('auth-buttons').classList.remove('hidden');
+                document.getElementById('profile-section').classList.add('hidden');
+            }
+        }
+        window.onload = checkLoginState;
+        function toggleProfileMenu() { document.getElementById('profile-menu').classList.toggle('hidden'); }
+        
+        function logout() {
+            closeHistoryModal();
+            toggleProfileMenu();
+            
+            playAuthAnimation("Logging out securely...", () => {
+                localStorage.removeItem('pdfly_token'); localStorage.removeItem('pdfly_email'); localStorage.removeItem('pdfly_username');
+                checkLoginState(); removeAllFiles();
+            });
+        }
+        
+        function handleAddFileClick() {
+            if (!localStorage.getItem('pdfly_token')) { openAuthModal('login'); return; }
+            document.getElementById('file-input').click();
+        }
+        
+        function openAuthModal(mode) { document.getElementById('auth-modal').classList.remove('hidden'); document.getElementById('auth-modal').classList.add('flex'); switchAuthTab(mode); }
+        function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); document.getElementById('auth-modal').classList.remove('flex'); document.getElementById('auth-title').classList.remove('text-green-500'); }
+        
+        function switchAuthTab(mode) {
+            authMode = mode;
+            const loginBtn = document.getElementById('tab-login'); const signupBtn = document.getElementById('tab-signup');
+            const title = document.getElementById('auth-title'); const submitBtn = document.getElementById('auth-submit-btn');
+            const usernameContainer = document.getElementById('username-container');
+            const identifierLabel = document.getElementById('auth-identifier-label'); const emailInput = document.getElementById('auth-email');
+            title.classList.remove('text-green-500');
+
+            if (mode === 'login') {
+                loginBtn.className = "flex-1 py-4 text-sm font-bold border-b-2 border-brand-yellow text-brand-yellow bg-slate-50/50 dark:bg-[#11151C]";
+                signupBtn.className = "flex-1 py-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-white";
+                title.innerText = "Welcome back"; submitBtn.innerText = "Log In";
+                usernameContainer.classList.add('hidden'); document.getElementById('auth-username').required = false;
+                identifierLabel.innerText = "Username or Email Address"; emailInput.placeholder = "Enter your username or email";
+            } else {
+                signupBtn.className = "flex-1 py-4 text-sm font-bold border-b-2 border-brand-yellow text-brand-yellow bg-slate-50/50 dark:bg-[#11151C]";
+                loginBtn.className = "flex-1 py-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-white";
+                title.innerText = "Create an account"; submitBtn.innerText = "Sign Up";
+                usernameContainer.classList.remove('hidden'); document.getElementById('auth-username').required = true;
+                identifierLabel.innerText = "Email Address"; emailInput.placeholder = "e.g. john@example.com";
+            }
+        }
+        
+        async function handleAuth(e) {
+            e.preventDefault();
+            const identifierOrEmail = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const formData = new FormData(); formData.append('password', password);
+
+            if (authMode === 'signup') { formData.append('username', document.getElementById('auth-username').value); formData.append('email', identifierOrEmail); } 
+            else { formData.append('identifier', identifierOrEmail); }
+
+            try {
+                const endpoint = authMode === 'login' ? '/login' : '/signup';
+                const response = await fetch(endpoint, { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (authMode === 'login') {
+                        localStorage.setItem('pdfly_token', data.access_token); localStorage.setItem('pdfly_email', data.email); localStorage.setItem('pdfly_username', data.username);
+                        closeAuthModal(); 
+                        playAuthAnimation("Setting up workspace...", () => {
+                            checkLoginState();
+                        });
+                    } else { 
+                        switchAuthTab('login'); 
+                        const title = document.getElementById('auth-title');
+                        title.innerText = "Account created! Please log in.";
+                        title.classList.add('text-green-500');
+                    }
+                } else { alert(data.error || "Authentication failed."); }
+            } catch (err) { alert("Server error. Please ensure FastAPI is running."); }
+        }
+        
+        async function openHistoryModal() {
+            toggleProfileMenu();
+            const token = localStorage.getItem('pdfly_token'); if (!token) return;
+            document.getElementById('history-modal').classList.remove('hidden'); document.getElementById('history-modal').classList.add('flex');
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-slate-500">Loading your history...</td></tr>';
+            try {
+                const response = await fetch('/history', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (response.ok) {
+                    const data = await response.json(); tbody.innerHTML = '';
+                    if (data.history.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-slate-500">No conversions yet.</td></tr>'; } 
+                    else {
+                        data.history.forEach(item => {
+                            const date = new Date(item.timestamp).toLocaleDateString();
+                            tbody.innerHTML += `<tr class="border-b border-gray-100 dark:border-brand-borderDark hover:bg-slate-50 dark:hover:bg-[#11151C] transition-colors"><td class="py-4 font-medium">${item.filename}</td><td class="py-4">${item.images_converted}</td><td class="py-4 text-brand-yellow font-medium">${item.file_size}</td><td class="py-4 text-slate-500">${date}</td></tr>`;
+                        });
+                    }
+                } else { if(response.status === 401) logout(); tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-red-500">Failed to load history. Session expired.</td></tr>'; }
+            } catch (err) { tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-red-500">Server error.</td></tr>'; }
+        }
+        
+        function closeHistoryModal() { document.getElementById('history-modal').classList.add('hidden'); document.getElementById('history-modal').classList.remove('flex'); }
+
+        // --- DRAG TO REORDER LOGIC ---
         let selectedFiles = [];
+        let draggedItemIndex = null;
+        const fileInput = document.getElementById('file-input'); const landingView = document.getElementById('landing-view'); const editorView = document.getElementById('editor-view'); const imageGrid = document.getElementById('image-grid');
 
-        // Handle File Selection
         fileInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
-
             selectedFiles = [...selectedFiles, ...files];
-            
-            landingView.classList.add('hidden');
-            editorView.classList.remove('hidden');
-            editorView.classList.add('flex'); 
-
-            updateGrid();
+            landingView.classList.add('hidden'); editorView.classList.remove('hidden'); editorView.classList.add('flex'); updateGrid();
         });
 
-        // Update the image grid UI
+        window.dragStart = function(e, index) { draggedItemIndex = index; setTimeout(() => e.target.classList.add('opacity-50', 'scale-95'), 0); }
+        window.dragOver = function(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+        window.dragLeave = function(e) { e.currentTarget.classList.remove('drag-over'); }
+        window.dropItem = function(e, targetIndex) {
+            e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+            if (draggedItemIndex !== null && draggedItemIndex !== targetIndex) {
+                const draggedFile = selectedFiles.splice(draggedItemIndex, 1)[0];
+                selectedFiles.splice(targetIndex, 0, draggedFile); updateGrid();
+            }
+        }
+        window.dragEnd = function(e) { e.target.classList.remove('opacity-50', 'scale-95'); draggedItemIndex = null; }
+
         function updateGrid() {
             imageGrid.innerHTML = '';
-            fileCountText.innerText = `${selectedFiles.length} File(s) Selected`;
-
-            if(selectedFiles.length > 0 && pdfFileNameInput.value === "document.pdf") {
-                const baseName = selectedFiles[0].name.split('.')[0];
-                pdfFileNameInput.value = `${baseName}_converted`;
-            }
-
+            document.getElementById('file-count').innerText = `${selectedFiles.length} Image(s) Ready`;
+            if(selectedFiles.length > 0 && document.getElementById('pdf-filename').value === "document.pdf") { document.getElementById('pdf-filename').value = `${selectedFiles[0].name.split('.')[0]}_converted.pdf`; }
             selectedFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const html = `
-                        <div class="relative group flex flex-col items-center bg-white p-2 rounded shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                            <span class="absolute -top-3 -left-3 bg-gray-800 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">${index + 1}</span>
-                            <div class="w-40 h-40 flex items-center justify-center overflow-hidden bg-gray-100 rounded mb-2">
-                                <img src="${e.target.result}" class="max-w-full max-h-full object-contain" alt="preview">
-                            </div>
-                            <span class="text-xs text-gray-600 truncate w-40 text-center" title="${file.name}">${file.name}</span>
-                            
-                            <button onclick="removeFile(${index})" class="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
+                    imageGrid.insertAdjacentHTML('beforeend', `
+                        <div draggable="true" ondragstart="dragStart(event, ${index})" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropItem(event, ${index})" ondragend="dragEnd(event)" class="draggable-card relative group flex flex-col items-center bg-white dark:bg-brand-cardDark p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-brand-borderDark hover:shadow-xl hover:border-brand-yellow/50 transition-all">
+                            <div class="absolute top-2 left-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 cursor-grab">⠿</div>
+                            <span class="absolute -top-3 -right-3 bg-brand-yellow text-slate-900 text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full z-10 shadow-md">${index + 1}</span>
+                            <div class="w-32 h-32 sm:w-44 sm:h-44 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-[#0B0F19] rounded-xl mb-3 pointer-events-none"><img src="${e.target.result}" class="max-w-full max-h-full object-contain pointer-events-none"></div>
+                            <span class="text-xs font-semibold truncate w-32 sm:w-44 text-center px-2 pointer-events-none">${file.name}</span>
+                            <button onclick="removeFile(${index})" class="absolute bottom-2 right-2 bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 shadow-lg z-20 hover:scale-105">&times;</button>
                         </div>
-                    `;
-                    imageGrid.insertAdjacentHTML('beforeend', html);
+                    `);
                 }
                 reader.readAsDataURL(file);
             });
         }
+        function removeFile(index) { selectedFiles.splice(index, 1); if (selectedFiles.length === 0) removeAllFiles(); else updateGrid(); }
 
-        // Remove a file from the array
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            if (selectedFiles.length === 0) {
-                removeAllFiles();
-            } else {
-                updateGrid();
-            }
-        }
-
-        // Handle Settings Selection UI
-        document.querySelectorAll('.setting-btn').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const group = e.target.getAttribute('data-group');
-                document.querySelectorAll(`.setting-btn[data-group="${group}"]`).forEach(btn => {
-                    btn.classList.remove('active', 'font-semibold', 'bg-gray-100', 'text-brand-black', 'border-brand-yellow');
-                    btn.classList.add('text-gray-500', 'border-gray-200');
-                    if(group === 'size') btn.classList.remove('border-2', 'border-brand-yellow');
-                });
-                
-                e.target.classList.remove('text-gray-500');
-                if(group === 'size') {
-                    e.target.classList.add('border-2', 'border-brand-yellow', 'font-semibold', 'text-brand-black');
-                } else {
-                    e.target.classList.add('bg-gray-100', 'font-semibold', 'text-brand-black');
-                }
-            });
-        });
-
-        // The real API call to FastAPI
+        // --- PROGRESS BAR LOGIC ---
         async function handleConvert() {
-            const finalFileName = document.getElementById('pdf-filename').value;
-            const convertBtn = document.getElementById('convert-btn');
-            
-            if (selectedFiles.length === 0) {
-                alert("Please add some images first.");
-                return;
-            }
+            const token = localStorage.getItem('pdfly_token');
+            if (!token) { logout(); return; }
 
-            // Change button to show progress
-            const originalBtnText = convertBtn.innerHTML;
-            convertBtn.innerHTML = "Converting... Please wait";
-            convertBtn.disabled = true;
-            convertBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            const finalFileName = document.getElementById('pdf-filename').value; const convertBtn = document.getElementById('convert-btn');
+            const progressContainer = document.getElementById('progress-container'); const progressBar = document.getElementById('progress-bar');
+            const progressPercent = document.getElementById('progress-percent');
+            if (selectedFiles.length === 0) return;
 
-            const formData = new FormData();
-            formData.append('filename', finalFileName);
-            selectedFiles.forEach(file => {
-                formData.append('files', file);
-            });
+            convertBtn.classList.add('hidden'); progressContainer.classList.remove('hidden'); progressContainer.classList.add('flex'); progressBar.style.width = '0%';
+            let simProgress = 0;
+            const progressInterval = setInterval(() => {
+                if (simProgress < 90) { simProgress += Math.random() * 5; if(simProgress > 90) simProgress = 90; progressBar.style.width = `${simProgress}%`; progressPercent.innerText = `${Math.round(simProgress)}%`; }
+            }, 200);
+
+            const formData = new FormData(); formData.append('filename', finalFileName);
+            selectedFiles.forEach(file => formData.append('files', file));
 
             try {
-                // Send the data to your backend!
-                const response = await fetch('/convert', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/convert', { method: 'POST', body: formData, headers: { 'Authorization': `Bearer ${token}` } });
+                clearInterval(progressInterval);
                 if (response.ok) {
-                    // Tell the browser to download the file directly to your system
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = finalFileName.endsWith('.pdf') ? finalFileName : finalFileName + '.pdf';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(downloadUrl);
-                    
-                    removeAllFiles();
+                    progressBar.style.width = '100%'; progressPercent.innerText = '100%'; document.getElementById('progress-text').innerText = 'Downloading...';
+                    const blob = await response.blob(); const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = downloadUrl; a.download = finalFileName.endsWith('.pdf') ? finalFileName : finalFileName + '.pdf';
+                    document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(downloadUrl);
+                    setTimeout(removeAllFiles, 800);
                 } else {
-                    const errorData = await response.json();
-                    alert("Conversion failed: " + (errorData.error || "Unknown error from server"));
+                    if(response.status === 401) { logout(); }
+                    const errorData = await response.json(); alert("Conversion failed: " + (errorData.detail || errorData.error || "Unknown error")); resetConvertButton(convertBtn, progressContainer);
                 }
-            } catch (error) {
-                console.error("Error:", error);
-                alert("An error occurred while communicating with the server.");
-            } finally {
-                // Restore the button
-                convertBtn.innerHTML = originalBtnText;
-                convertBtn.disabled = false;
-                convertBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-            }
+            } catch (error) { clearInterval(progressInterval); alert("Server error."); resetConvertButton(convertBtn, progressContainer); } 
         }
 
-        // Helper to reset everything back to the start page
+        function resetConvertButton(btn, container) { btn.classList.remove('hidden'); container.classList.add('hidden'); container.classList.remove('flex'); document.getElementById('progress-text').innerText = 'Processing images...'; }
         function removeAllFiles() {
-            selectedFiles = [];
-            editorView.classList.add('hidden');
-            editorView.classList.remove('flex');
-            landingView.classList.remove('hidden');
-            pdfFileNameInput.value = "document.pdf";
+            selectedFiles = []; editorView.classList.add('hidden'); editorView.classList.remove('flex', 'lg:flex-row'); landingView.classList.remove('hidden'); document.getElementById('pdf-filename').value = "document.pdf";
+            document.getElementById('convert-btn').classList.remove('hidden'); document.getElementById('progress-container').classList.add('hidden'); document.getElementById('progress-container').classList.remove('flex'); document.getElementById('progress-text').innerText = 'Processing images...';
         }
     </script>
 </body>

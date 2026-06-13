@@ -5,3 +5,5 @@ Pillow
 motor
 jinja2
 python-dotenv
+bcrypt
+PyJWT
