@@ -1,0 +1,3 @@
+@echo off
+REM Build placeholder for PDFly
+echo Building PDFly...
