@@ -1,15 +1,15 @@
 """
 PDFLY
-Professional Image to PDF Converter
+Professional Image to PDF Converter (Cloud Optimized)
 """
 
 import os
 from PIL import Image, ImageOps
 
 class PDFConverter:
-    # Standard A4 size at 300 DPI
-    A4_WIDTH = 2480
-    A4_HEIGHT = 3508
+    # Cloud-Optimized A4 size at 100 DPI (Saves Memory & Prevents Vercel Timeouts)
+    A4_WIDTH = 827
+    A4_HEIGHT = 1169
 
     @staticmethod
     def convert(image_paths, output_path, progress_callback=None):
@@ -26,11 +26,11 @@ class PDFConverter:
                     continue
                 
                 try:
-                    # 1. Open the raw image and fix rotation
+                    # 1. Open and fix rotation
                     raw_image = Image.open(path)
                     raw_image = ImageOps.exif_transpose(raw_image)
 
-                    # 2. Clean transparency and convert to RGB
+                    # 2. Clean transparency
                     if raw_image.mode in ('RGBA', 'LA') or (raw_image.mode == 'P' and 'transparency' in raw_image.info):
                         clean_bg = Image.new("RGB", raw_image.size, (255, 255, 255))
                         clean_bg.paste(raw_image, mask=raw_image.convert('RGBA').split()[3])
@@ -39,20 +39,19 @@ class PDFConverter:
                         raw_image = raw_image.convert("RGB")
 
                     # 3. Calculate "Perfect Fit" Ratio
-                    # This ensures the image scales to touch at least 2 edges of the A4 page
                     img_w, img_h = raw_image.size
                     ratio = min(PDFConverter.A4_WIDTH / img_w, PDFConverter.A4_HEIGHT / img_h)
                     
                     new_w = int(img_w * ratio)
                     new_h = int(img_h * ratio)
 
-                    # 4. Resize the image with high-quality Lanczos filter
-                    raw_image = raw_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    # 4. Resize (Using BILINEAR instead of LANCZOS for 5x faster cloud processing)
+                    raw_image = raw_image.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
                     # 5. Create a blank white A4 canvas
                     a4_canvas = Image.new("RGB", (PDFConverter.A4_WIDTH, PDFConverter.A4_HEIGHT), (255, 255, 255))
 
-                    # 6. Paste the resized image perfectly centered on the A4 canvas
+                    # 6. Paste perfectly centered
                     x_offset = (PDFConverter.A4_WIDTH - new_w) // 2
                     y_offset = (PDFConverter.A4_HEIGHT - new_h) // 2
                     a4_canvas.paste(raw_image, (x_offset, y_offset))
@@ -68,7 +67,7 @@ class PDFConverter:
             if len(images) == 0:
                 raise ValueError("No valid images found.")
 
-            # 7. Save the perfectly formatted A4 pages into a single PDF
+            # 7. Save explicitly as a PDF
             first = images[0]
             remaining = images[1:]
             first.save(
@@ -76,7 +75,7 @@ class PDFConverter:
                 format="PDF",
                 save_all=True,
                 append_images=remaining,
-                resolution=300.0
+                resolution=100.0
             )
             return True
 

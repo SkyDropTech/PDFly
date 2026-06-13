@@ -39,12 +39,10 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .theme-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         
-        /* Drag and drop card animations */
         .draggable-card { transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s; cursor: grab; }
         .draggable-card:active { cursor: grabbing; }
         .drag-over { border: 2px dashed #FACC15 !important; transform: scale(1.05); opacity: 0.8; }
 
-        /* Custom Auth Animation Keyframes */
         @keyframes fillProgress {
             0% { transform: scaleX(0); }
             40% { transform: scaleX(0.4); }
@@ -184,7 +182,7 @@
                     </div>
                     <div id="progress-container" class="hidden flex-col gap-2 mt-4">
                         <div class="flex justify-between text-xs font-bold">
-                            <span class="text-slate-500" id="progress-text">Processing images...</span>
+                            <span class="text-slate-500" id="progress-text">Optimizing images...</span>
                             <span class="text-brand-yellow" id="progress-percent">0%</span>
                         </div>
                         <div class="w-full h-2.5 bg-slate-100 dark:bg-[#0B0F19] rounded-full overflow-hidden border border-gray-200 dark:border-brand-borderDark">
@@ -249,60 +247,80 @@
             const progressFill = document.getElementById('auth-progress-fill');
             
             textElement.innerText = actionMessage;
-            
-            // Reset and trigger progress bar animation
             progressFill.classList.remove('animate-progress');
-            void progressFill.offsetWidth; // trigger reflow
+            void progressFill.offsetWidth; 
             progressFill.classList.add('animate-progress');
-
-            // Show overlay
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
-            
-            // Fade in
             setTimeout(() => { overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100'); }, 10);
             
-            // Wait 2.4 seconds, then fade out and execute callback
             setTimeout(() => {
                 overlay.classList.remove('opacity-100');
                 overlay.classList.add('opacity-0');
-                
                 setTimeout(() => {
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex');
                     if(callback) callback();
-                }, 300); // 300ms fade out
+                }, 300); 
             }, 2400); 
+        }
+
+        // --- NEW: MOBILE IMAGE AUTO-COMPRESSOR ---
+        async function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Cloud-safe maximum dimensions
+                        const MAX_WIDTH = 1200;
+                        const MAX_HEIGHT = 1600;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        canvas.toBlob((blob) => {
+                            const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            resolve(newFile);
+                        }, 'image/jpeg', 0.85); // 85% quality keeps it looking great but tiny size!
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         // --- GLOBAL DRAG & DROP LOGIC ---
         const dragOverlay = document.getElementById('drag-overlay');
         let dragCounter = 0;
 
-        window.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            if (e.dataTransfer.types.includes("Files")) {
-                dragCounter++;
-                dragOverlay.classList.remove('hidden'); dragOverlay.classList.add('flex');
-            }
-        });
-        window.addEventListener('dragleave', (e) => {
-            e.preventDefault(); dragCounter--;
-            if (dragCounter <= 0) { dragCounter = 0; dragOverlay.classList.add('hidden'); dragOverlay.classList.remove('flex'); }
-        });
+        window.addEventListener('dragenter', (e) => { e.preventDefault(); if (e.dataTransfer.types.includes("Files")) { dragCounter++; dragOverlay.classList.remove('hidden'); dragOverlay.classList.add('flex'); } });
+        window.addEventListener('dragleave', (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dragOverlay.classList.add('hidden'); dragOverlay.classList.remove('flex'); } });
         window.addEventListener('dragover', (e) => e.preventDefault());
         window.addEventListener('drop', (e) => {
             e.preventDefault(); dragCounter = 0; dragOverlay.classList.add('hidden'); dragOverlay.classList.remove('flex');
-
             if (!localStorage.getItem('pdfly_token')) { openAuthModal('login'); return; }
-
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
                 if(files.length > 0) {
                     selectedFiles = [...selectedFiles, ...files];
                     document.getElementById('landing-view').classList.add('hidden');
-                    document.getElementById('editor-view').classList.remove('hidden');
-                    document.getElementById('editor-view').classList.add('flex'); 
+                    document.getElementById('editor-view').classList.remove('hidden'); document.getElementById('editor-view').classList.add('flex'); 
                     updateGrid();
                 } else { alert("Only image files are supported!"); }
             }
@@ -318,24 +336,15 @@
 
         let authMode = 'login';
         function checkLoginState() {
-            const token = localStorage.getItem('pdfly_token');
-            const username = localStorage.getItem('pdfly_username');
-            if (token && username) {
-                document.getElementById('auth-buttons').classList.add('hidden');
-                document.getElementById('profile-section').classList.remove('hidden');
-                document.getElementById('user-display-name').innerText = "@" + username;
-            } else {
-                document.getElementById('auth-buttons').classList.remove('hidden');
-                document.getElementById('profile-section').classList.add('hidden');
-            }
+            const token = localStorage.getItem('pdfly_token'); const username = localStorage.getItem('pdfly_username');
+            if (token && username) { document.getElementById('auth-buttons').classList.add('hidden'); document.getElementById('profile-section').classList.remove('hidden'); document.getElementById('user-display-name').innerText = "@" + username; } 
+            else { document.getElementById('auth-buttons').classList.remove('hidden'); document.getElementById('profile-section').classList.add('hidden'); }
         }
         window.onload = checkLoginState;
         function toggleProfileMenu() { document.getElementById('profile-menu').classList.toggle('hidden'); }
         
         function logout() {
-            closeHistoryModal();
-            toggleProfileMenu();
-            
+            closeHistoryModal(); toggleProfileMenu();
             playAuthAnimation("Logging out securely...", () => {
                 localStorage.removeItem('pdfly_token'); localStorage.removeItem('pdfly_email'); localStorage.removeItem('pdfly_username');
                 checkLoginState(); removeAllFiles();
@@ -354,8 +363,7 @@
             authMode = mode;
             const loginBtn = document.getElementById('tab-login'); const signupBtn = document.getElementById('tab-signup');
             const title = document.getElementById('auth-title'); const submitBtn = document.getElementById('auth-submit-btn');
-            const usernameContainer = document.getElementById('username-container');
-            const identifierLabel = document.getElementById('auth-identifier-label'); const emailInput = document.getElementById('auth-email');
+            const usernameContainer = document.getElementById('username-container'); const identifierLabel = document.getElementById('auth-identifier-label'); const emailInput = document.getElementById('auth-email');
             title.classList.remove('text-green-500');
 
             if (mode === 'login') {
@@ -375,8 +383,7 @@
         
         async function handleAuth(e) {
             e.preventDefault();
-            const identifierOrEmail = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
+            const identifierOrEmail = document.getElementById('auth-email').value; const password = document.getElementById('auth-password').value;
             const formData = new FormData(); formData.append('password', password);
 
             if (authMode === 'signup') { formData.append('username', document.getElementById('auth-username').value); formData.append('email', identifierOrEmail); } 
@@ -391,14 +398,10 @@
                     if (authMode === 'login') {
                         localStorage.setItem('pdfly_token', data.access_token); localStorage.setItem('pdfly_email', data.email); localStorage.setItem('pdfly_username', data.username);
                         closeAuthModal(); 
-                        playAuthAnimation("Setting up workspace...", () => {
-                            checkLoginState();
-                        });
+                        playAuthAnimation("Setting up workspace...", () => { checkLoginState(); });
                     } else { 
                         switchAuthTab('login'); 
-                        const title = document.getElementById('auth-title');
-                        title.innerText = "Account created! Please log in.";
-                        title.classList.add('text-green-500');
+                        const title = document.getElementById('auth-title'); title.innerText = "Account created! Please log in."; title.classList.add('text-green-500');
                     }
                 } else { alert(data.error || "Authentication failed."); }
             } catch (err) { alert("Server error. Please ensure FastAPI is running."); }
@@ -473,28 +476,51 @@
         }
         function removeFile(index) { selectedFiles.splice(index, 1); if (selectedFiles.length === 0) removeAllFiles(); else updateGrid(); }
 
-        // --- PROGRESS BAR LOGIC ---
+        // --- PROGRESS BAR & CONVERT LOGIC ---
         async function handleConvert() {
             const token = localStorage.getItem('pdfly_token');
             if (!token) { logout(); return; }
 
-            const finalFileName = document.getElementById('pdf-filename').value; const convertBtn = document.getElementById('convert-btn');
-            const progressContainer = document.getElementById('progress-container'); const progressBar = document.getElementById('progress-bar');
+            const finalFileName = document.getElementById('pdf-filename').value; 
+            const convertBtn = document.getElementById('convert-btn');
+            const progressContainer = document.getElementById('progress-container'); 
+            const progressBar = document.getElementById('progress-bar');
             const progressPercent = document.getElementById('progress-percent');
+            
             if (selectedFiles.length === 0) return;
 
-            convertBtn.classList.add('hidden'); progressContainer.classList.remove('hidden'); progressContainer.classList.add('flex'); progressBar.style.width = '0%';
+            convertBtn.classList.add('hidden'); 
+            progressContainer.classList.remove('hidden'); 
+            progressContainer.classList.add('flex'); 
+            progressBar.style.width = '0%';
+            
             let simProgress = 0;
             const progressInterval = setInterval(() => {
-                if (simProgress < 90) { simProgress += Math.random() * 5; if(simProgress > 90) simProgress = 90; progressBar.style.width = `${simProgress}%`; progressPercent.innerText = `${Math.round(simProgress)}%`; }
+                if (simProgress < 90) { 
+                    simProgress += Math.random() * 5; 
+                    if(simProgress > 90) simProgress = 90; 
+                    progressBar.style.width = `${simProgress}%`; 
+                    progressPercent.innerText = `${Math.round(simProgress)}%`; 
+                }
             }, 200);
 
-            const formData = new FormData(); formData.append('filename', finalFileName);
-            selectedFiles.forEach(file => formData.append('files', file));
+            // 1. Shrink images in the browser before sending
+            document.getElementById('progress-text').innerText = 'Optimizing for cloud...';
+            const formData = new FormData(); 
+            formData.append('filename', finalFileName);
+            
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const compressedFile = await compressImage(selectedFiles[i]);
+                formData.append('files', compressedFile);
+            }
+
+            document.getElementById('progress-text').innerText = 'Generating PDF...';
 
             try {
+                // 2. Send the tiny images to Vercel
                 const response = await fetch('/convert', { method: 'POST', body: formData, headers: { 'Authorization': `Bearer ${token}` } });
                 clearInterval(progressInterval);
+                
                 if (response.ok) {
                     progressBar.style.width = '100%'; progressPercent.innerText = '100%'; document.getElementById('progress-text').innerText = 'Downloading...';
                     const blob = await response.blob(); const downloadUrl = window.URL.createObjectURL(blob);
