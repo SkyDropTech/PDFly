@@ -15,9 +15,12 @@ from converter import PDFConverter
 from database import log_conversion, get_user, create_user, get_user_history
 
 app = FastAPI(title="PDFly Web App")
-templates = Jinja2Templates(directory="templates")
 
-# CRITICAL VERCEL FIX: Serverless environments require using the /tmp directory
+# --- VERCEL FIX 1: Absolute path to templates ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+# --- VERCEL FIX 2: /tmp directory for serverless ---
 TEMP_DIR = "/tmp/temp_conversions"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
