@@ -4,9 +4,7 @@ Professional Image to PDF Converter
 """
 
 import os
-
 from PIL import Image, ImageOps
-
 
 class PDFConverter:
 
@@ -25,133 +23,98 @@ class PDFConverter:
         output_path : str
         progress_callback : function(current, total)
         """
-
         if not image_paths:
             raise ValueError("No images selected.")
 
         images = []
 
         try:
-
             total = len(image_paths)
 
             for index, path in enumerate(image_paths):
-
                 if not os.path.exists(path):
                     continue
+                
+                try:
+                    image = Image.open(path)
+                    
+                    # Fix EXIF orientation (e.g., photos taken on smartphones)
+                    image = ImageOps.exif_transpose(image)
 
-                image = Image.open(path)
+                    # Handle transparency (PNGs, WebP) -> Apply a white background instead of black
+                    if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
+                        background = Image.new("RGB", image.size, (255, 255, 255))
+                        background.paste(image, mask=image.convert('RGBA').split()[3])
+                        image = background
+                    elif image.mode != "RGB":
+                        # Convert standard images to RGB
+                        image = image.convert("RGB")
 
-                # Fix EXIF orientation
-                image = ImageOps.exif_transpose(image)
+                    images.append(image)
 
-                # Convert every image to RGB
-                if image.mode != "RGB":
-                    image = image.convert("RGB")
-
-                images.append(image)
+                except Exception as e:
+                    raise ValueError(f"Error processing {os.path.basename(path)}: {str(e)}")
 
                 if progress_callback:
-
-                    progress_callback(
-
-                        index + 1,
-
-                        total
-
-                    )
+                    progress_callback(index + 1, total)
 
             if len(images) == 0:
-
-                raise ValueError(
-
-                    "No valid images found."
-
-                )
+                raise ValueError("No valid images found.")
 
             first = images[0]
-
             remaining = images[1:]
 
             first.save(
-
                 output_path,
-
                 save_all=True,
-
                 append_images=remaining,
-
                 resolution=100.0
-
             )
 
             return True
 
         finally:
-
+            # Clean up memory to prevent memory leaks on the server
             for image in images:
-
                 try:
-
                     image.close()
-
                 except Exception:
-
                     pass
 
     @staticmethod
     def validate_output(output_path):
-
         if not output_path:
-
             return False
-
         folder = os.path.dirname(output_path)
-
         return os.path.exists(folder)
 
     @staticmethod
     def supported_formats():
-
         return (
-
             ".jpg",
-
             ".jpeg",
-
             ".png",
-
             ".bmp",
-
             ".webp"
-
         )
 
     @staticmethod
     def get_pdf_size(file_path):
-
         if not os.path.exists(file_path):
-
             return "0 KB"
-
+        
         size = os.path.getsize(file_path)
-
+        
         if size < 1024:
-
             return f"{size} Bytes"
-
         if size < 1024 * 1024:
-
             return f"{size / 1024:.2f} KB"
-
         return f"{size / (1024 * 1024):.2f} MB"
 
     @staticmethod
     def image_count(image_paths):
-
         return len(image_paths)
 
     @staticmethod
     def output_exists(output_path):
-
         return os.path.exists(output_path)

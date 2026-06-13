@@ -1,1 +1,7 @@
-# PDFly Python dependencies
+fastapi
+uvicorn
+python-multipart
+Pillow
+motor
+jinja2
+python-dotenv
