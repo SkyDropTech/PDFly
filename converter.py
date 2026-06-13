@@ -16,12 +16,6 @@ class PDFConverter:
     ):
         """
         Convert multiple images into a single PDF.
-
-        Parameters
-        ----------
-        image_paths : list[str]
-        output_path : str
-        progress_callback : function(current, total)
         """
         if not image_paths:
             raise ValueError("No images selected.")
@@ -36,21 +30,25 @@ class PDFConverter:
                     continue
                 
                 try:
-                    image = Image.open(path)
+                    # 1. Open the raw image
+                    raw_image = Image.open(path)
                     
-                    # Fix EXIF orientation (e.g., photos taken on smartphones)
-                    image = ImageOps.exif_transpose(image)
+                    # 2. Fix rotation from smartphone cameras
+                    raw_image = ImageOps.exif_transpose(raw_image)
 
-                    # Handle transparency (PNGs, WebP) -> Apply a white background instead of black
-                    if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
-                        background = Image.new("RGB", image.size, (255, 255, 255))
-                        background.paste(image, mask=image.convert('RGBA').split()[3])
-                        image = background
-                    elif image.mode != "RGB":
-                        # Convert standard images to RGB
-                        image = image.convert("RGB")
+                    # 3. Create a completely fresh, clean white RGB canvas
+                    # This destroys any buggy JPEG metadata or format conflicts
+                    clean_image = Image.new("RGB", raw_image.size, (255, 255, 255))
 
-                    images.append(image)
+                    # 4. Paste the original image onto the clean canvas
+                    if raw_image.mode in ('RGBA', 'LA') or (raw_image.mode == 'P' and 'transparency' in raw_image.info):
+                        # Paste with transparency mask so backgrounds stay white, not black
+                        clean_image.paste(raw_image, mask=raw_image.convert('RGBA').split()[3])
+                    else:
+                        # Paste standard images directly
+                        clean_image.paste(raw_image)
+
+                    images.append(clean_image)
 
                 except Exception as e:
                     raise ValueError(f"Error processing {os.path.basename(path)}: {str(e)}")
@@ -64,8 +62,10 @@ class PDFConverter:
             first = images[0]
             remaining = images[1:]
 
+            # 5. Save explicitly as a PDF
             first.save(
                 output_path,
+                format="PDF",
                 save_all=True,
                 append_images=remaining,
                 resolution=100.0
@@ -74,7 +74,7 @@ class PDFConverter:
             return True
 
         finally:
-            # Clean up memory to prevent memory leaks on the server
+            # Clean up memory to keep the server running fast
             for image in images:
                 try:
                     image.close()
